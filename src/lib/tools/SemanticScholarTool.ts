@@ -12,8 +12,10 @@ export class SemanticScholarTool {
 
   async searchPapers(query: string, maxResults: number = 100): Promise<ResearchPaper[]> {
     try {
-      // Add Ethiopia-related terms to the query if not already present
-      const enhancedQuery = this.enhanceQueryWithEthiopianTerms(query);
+      console.log('Searching Semantic Scholar for:', query);
+
+      // Don't automatically add Ethiopian terms - only if specifically requested
+      const enhancedQuery = query;
 
       // Make a request to the Semantic Scholar API
       const response = await axios.get(`${this.baseUrl}/paper/search`, {
@@ -26,58 +28,109 @@ export class SemanticScholarTool {
       });
 
       if (!response.data || !response.data.data) {
+        console.log('No data returned from Semantic Scholar API');
         return [];
       }
 
+      console.log(`Semantic Scholar API returned ${response.data.data.length} results`);
+
       // Transform the Semantic Scholar results to our ResearchPaper format
-      const papers = await Promise.all(
-        response.data.data.map(async (paper: any) => {
-          // Get author details to check for Ethiopian affiliations
-          const authorDetails = await this.getAuthorsWithAffiliations(paper.authors);
-          const ethiopianAffiliations = this.extractEthiopianAffiliations(authorDetails);
+      const papers = response.data.data.map((paper: any) => {
+        // Extract potential affiliations from author names and paper title
+        const potentialAffiliations = this.extractPotentialAffiliations(paper);
 
-          return {
-            id: paper.paperId || `ss-${Math.random().toString(36).substring(2, 9)}`,
-            title: paper.title || 'Untitled',
-            authors: paper.authors?.map((author: any) => author.name) || [],
-            abstract: paper.abstract || '',
-            url: paper.url || `https://www.semanticscholar.org/paper/${paper.paperId}`,
-            pdfUrl: paper.openAccessPdf?.url || '',
-            publishedDate: paper.year ? `${paper.year}` : '',
-            affiliations: ethiopianAffiliations,
-            source: 'semantic_scholar' as const
-          };
-        })
-      );
-
-      // Add Ethiopia as affiliation if query contains Ethiopia but no affiliations found
-      const enhancedPapers = papers.map(paper => {
-        if (paper.affiliations.length === 0 && query.toLowerCase().includes('ethiopia')) {
-          return { ...paper, affiliations: ['Ethiopia'] };
-        }
-        return paper;
+        return {
+          id: paper.paperId || `ss-${Math.random().toString(36).substring(2, 9)}`,
+          title: paper.title || 'Untitled',
+          authors: paper.authors?.map((author: any) => author.name) || [],
+          abstract: paper.abstract || '',
+          url: paper.url || `https://www.semanticscholar.org/paper/${paper.paperId}`,
+          pdfUrl: paper.openAccessPdf?.url || '',
+          publishedDate: paper.year ? `${paper.year}` : '',
+          affiliations: potentialAffiliations,
+          source: 'semantic_scholar' as const
+        };
       });
 
-      console.log(`Semantic Scholar search found ${enhancedPapers.length} papers`);
-      return enhancedPapers;
+      console.log(`Processed ${papers.length} papers from Semantic Scholar`);
+      return papers;
     } catch (error) {
       console.error('Error searching Semantic Scholar papers:', error);
       return [];
     }
   }
 
-  private async getAuthorsWithAffiliations(authors: any[]): Promise<any[]> {
-    if (!authors || authors.length === 0) {
-      return [];
+  private extractPotentialAffiliations(paper: any): string[] {
+    const affiliations: string[] = [];
+    const ethiopianUniversities = [
+      'Addis Ababa University',
+      'Bahir Dar University',
+      'Mekelle University',
+      'Jimma University',
+      'Hawassa University',
+      'Gondar University',
+      'Adama Science and Technology University',
+      'Arba Minch University',
+      'Haramaya University',
+      'Dire Dawa University',
+      'Wollo University',
+      'Debre Berhan University',
+      'Debre Markos University',
+      'Wollega University',
+      'Wolaita Sodo University',
+      'Dilla University',
+      'Ambo University',
+      'Axum University',
+      'Wachemo University',
+      'Wolkite University',
+      'Ethiopia'
+    ];
+
+    // Check paper title
+    if (paper.title) {
+      const title = paper.title.toLowerCase();
+      ethiopianUniversities.forEach(university => {
+        if (title.includes(university.toLowerCase()) && !affiliations.includes(university)) {
+          affiliations.push(university);
+        }
+      });
     }
 
-    // For simplicity and to reduce API calls, we'll just use the author information we already have
-    // In a production app, we would fetch detailed author information including affiliations
-    return authors.map(author => ({
-      name: author.name,
-      // Simulate affiliations for testing
-      affiliations: author.name.toLowerCase().includes('ethiopia') ? ['Ethiopia'] : []
-    }));
+    // Check abstract
+    if (paper.abstract) {
+      const abstract = paper.abstract.toLowerCase();
+      ethiopianUniversities.forEach(university => {
+        if (abstract.includes(university.toLowerCase()) && !affiliations.includes(university)) {
+          affiliations.push(university);
+        }
+      });
+    }
+
+    // Check venue
+    if (paper.venue) {
+      const venue = paper.venue.toLowerCase();
+      ethiopianUniversities.forEach(university => {
+        if (venue.includes(university.toLowerCase()) && !affiliations.includes(university)) {
+          affiliations.push(university);
+        }
+      });
+    }
+
+    // Check authors
+    if (paper.authors && Array.isArray(paper.authors)) {
+      paper.authors.forEach((author: any) => {
+        if (author.name) {
+          const authorName = author.name.toLowerCase();
+          ethiopianUniversities.forEach(university => {
+            if (authorName.includes(university.toLowerCase()) && !affiliations.includes(university)) {
+              affiliations.push(university);
+            }
+          });
+        }
+      });
+    }
+
+    return affiliations;
   }
 
   private enhanceQueryWithEthiopianTerms(query: string): string {

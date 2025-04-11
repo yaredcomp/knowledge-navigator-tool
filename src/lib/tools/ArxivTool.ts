@@ -10,8 +10,8 @@ export class ArxivToolWrapper {
 
   async searchPapers(query: string, maxResults: number = 100): Promise<ResearchPaper[]> {
     try {
-      // Add Ethiopia-related terms to the query if not already present
-      const enhancedQuery = this.enhanceQueryWithEthiopianTerms(query);
+      // Use the query as is, without automatically adding Ethiopian terms
+      const enhancedQuery = query;
 
       console.log('Sending query to ArXiv API:', enhancedQuery);
 
@@ -49,11 +49,8 @@ export class ArxivToolWrapper {
         // Extract Ethiopian affiliations from the authors
         const ethiopianAffiliations = this.extractEthiopianAffiliations(entry);
 
-        // If no Ethiopian affiliations found but query contains Ethiopia terms,
-        // add Ethiopia as a default affiliation for search purposes
-        const finalAffiliations = ethiopianAffiliations.length > 0
-          ? ethiopianAffiliations
-          : query.toLowerCase().includes('ethiopia') ? ['Ethiopia'] : [];
+        // Use the extracted affiliations without adding default ones
+        const finalAffiliations = ethiopianAffiliations;
 
         return {
           id: entry.id || `arxiv-${Math.random().toString(36).substring(2, 9)}`,
