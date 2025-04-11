@@ -2,6 +2,14 @@
 
 A knowledge navigator for AI research papers that uses natural language processing to interpret search queries and find relevant papers from arXiv and Semantic Scholar.
 
+![AI Research Navigator Screenshot](./images/screenshoot.PNG)
+
+_Screenshot of the AI Research Navigator showing search results with the LLM's interpretation_
+
+![AI Research Navigator Detail View](./images/screnshot%201.PNG)
+
+_Screenshot showing the detailed search interface with natural language query processing_
+
 ## Features
 
 - **Natural Language Search**: Use everyday language to search for research papers
