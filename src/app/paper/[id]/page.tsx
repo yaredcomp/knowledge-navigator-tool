@@ -4,15 +4,24 @@ import { useEffect, useState } from 'react';
 import { ResearchPaper } from '@/types';
 import Link from 'next/link';
 
-export default function PaperPage({ params }: { params: { id: string } }) {
+export default function PaperPage({ params }: { params: Promise<{ id: string }> }) {
   const [paper, setPaper] = useState<ResearchPaper | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paperId, setPaperId] = useState<string>('');
 
   useEffect(() => {
+    params.then((resolvedParams) => {
+      setPaperId(resolvedParams.id);
+    });
+  }, [params]);
+
+  useEffect(() => {
+    if (!paperId) return;
+    
     const fetchPaper = async () => {
       try {
-        const response = await fetch(`/api/paper/${params.id}`);
+        const response = await fetch(`/api/paper/${paperId}`);
         
         if (!response.ok) {
           throw new Error('Failed to fetch paper details');
@@ -29,7 +38,7 @@ export default function PaperPage({ params }: { params: { id: string } }) {
     };
 
     fetchPaper();
-  }, [params.id]);
+  }, [paperId]);
 
   if (isLoading) {
     return (

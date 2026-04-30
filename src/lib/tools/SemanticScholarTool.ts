@@ -1,131 +1,133 @@
-// Direct API implementation without using MCPTool
 import { ResearchPaper } from '@/types';
 import axios from 'axios';
+import { ETHIOPIAN_UNIVERSITIES } from '@/config/universities';
+import { DATA_SOURCE_CONFIGS } from '@/config/api-config';
 
 export class SemanticScholarTool {
   private apiKey?: string;
-  private baseUrl = 'https://api.semanticscholar.org/graph/v1';
+  private baseUrl: string;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey;
+    this.apiKey = apiKey || process.env.SEMANTIC_SCHOLAR_API_KEY;
+    this.baseUrl = DATA_SOURCE_CONFIGS.semantic_scholar.baseUrl;
   }
 
   async searchPapers(query: string, maxResults: number = 100): Promise<ResearchPaper[]> {
-    try {
-      console.log('Searching Semantic Scholar for:', query);
+    const maxRetries = 4;
+    const baseDelay = 3000;
 
-      // Don't automatically add Ethiopian terms - only if specifically requested
-      const enhancedQuery = query;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Semantic Scholar attempt ${attempt}/${maxRetries} for: "${query}"`);
 
-      // Make a request to the Semantic Scholar API
-      const response = await axios.get(`${this.baseUrl}/paper/search`, {
-        params: {
-          query: enhancedQuery,
-          limit: maxResults,
-          fields: 'title,authors,abstract,url,venue,year,externalIds,openAccessPdf'
-        },
-        headers: this.apiKey ? { 'x-api-key': this.apiKey } : {}
-      });
+        const response = await axios.get(`${this.baseUrl}/paper/search`, {
+          params: {
+            query: query,
+            limit: Math.min(maxResults, 100),
+            offset: 0,
+            fields: 'title,authors,abstract,url,venue,year,externalIds,openAccessPdf,citationCount',
+          },
+          headers: {
+            'Accept': 'application/json',
+            ...(this.apiKey ? { 'x-api-key': this.apiKey } : {}),
+          },
+          timeout: 25000,
+          validateStatus: () => true,
+        });
 
-      if (!response.data || !response.data.data) {
-        console.log('No data returned from Semantic Scholar API');
-        return [];
+        console.log('Semantic Scholar response status:', response.status);
+
+        if (response.status === 429) {
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          console.log(`Rate limited. Waiting ${delay}ms before retry ${attempt + 1}/${maxRetries}...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        if (response.status !== 200) {
+          console.error('Semantic Scholar HTTP error:', response.status, response.statusText);
+          if (attempt < maxRetries) {
+            const delay = baseDelay * attempt;
+            console.log(`Waiting ${delay}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          return [];
+        }
+
+        const data = response.data;
+        if (!data) {
+          console.log('Empty response from Semantic Scholar');
+          return [];
+        }
+
+        if (data.message && data.code === '429') {
+          console.log('Rate limited (429 in body). Waiting before retry...');
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        if (data.error) {
+          console.error('Semantic Scholar API error:', data.error);
+          return [];
+        }
+
+        const papersData = data.data || [];
+        console.log(`Semantic Scholar returned ${papersData.length} results (total: ${data.total})`);
+
+        if (papersData.length === 0) {
+          console.log('No papers found in response');
+          return [];
+        }
+
+        const papers = papersData.map((paper: any) => {
+          const potentialAffiliations = this.extractPotentialAffiliations(paper);
+
+          return {
+            id: paper.paperId || `ss-${Math.random().toString(36).substring(2, 9)}`,
+            title: paper.title || 'Untitled',
+            authors: paper.authors?.map((author: any) => author.name).filter(Boolean) || [],
+            abstract: paper.abstract || '',
+            url: paper.url || (paper.paperId ? `https://www.semanticscholar.org/paper/${paper.paperId}` : ''),
+            pdfUrl: paper.openAccessPdf?.url || '',
+            publishedDate: paper.year ? String(paper.year) : '',
+            affiliations: potentialAffiliations,
+            source: 'semantic_scholar' as const,
+            citationCount: paper.citationCount || 0,
+          };
+        });
+
+        console.log(`Processed ${papers.length} papers from Semantic Scholar`);
+        return papers;
+      } catch (error: any) {
+        console.error(`Semantic Scholar attempt ${attempt} error:`, error.message);
+
+        if (attempt === maxRetries) {
+          console.error('All Semantic Scholar attempts failed');
+          break;
+        }
+
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        console.log(`Waiting ${delay}ms before retry ${attempt + 1}/${maxRetries}...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-
-      console.log(`Semantic Scholar API returned ${response.data.data.length} results`);
-
-      // Transform the Semantic Scholar results to our ResearchPaper format
-      const papers = response.data.data.map((paper: any) => {
-        // Extract potential affiliations from author names and paper title
-        const potentialAffiliations = this.extractPotentialAffiliations(paper);
-
-        return {
-          id: paper.paperId || `ss-${Math.random().toString(36).substring(2, 9)}`,
-          title: paper.title || 'Untitled',
-          authors: paper.authors?.map((author: any) => author.name) || [],
-          abstract: paper.abstract || '',
-          url: paper.url || `https://www.semanticscholar.org/paper/${paper.paperId}`,
-          pdfUrl: paper.openAccessPdf?.url || '',
-          publishedDate: paper.year ? `${paper.year}` : '',
-          affiliations: potentialAffiliations,
-          source: 'semantic_scholar' as const
-        };
-      });
-
-      console.log(`Processed ${papers.length} papers from Semantic Scholar`);
-      return papers;
-    } catch (error) {
-      console.error('Error searching Semantic Scholar papers:', error);
-      return [];
     }
+
+    return [];
   }
 
-  private extractPotentialAffiliations(paper: any): string[] {
+  extractPotentialAffiliations(paper: any): string[] {
     const affiliations: string[] = [];
-    const ethiopianUniversities = [
-      'Addis Ababa University',
-      'Bahir Dar University',
-      'Mekelle University',
-      'Jimma University',
-      'Hawassa University',
-      'Gondar University',
-      'Adama Science and Technology University',
-      'Arba Minch University',
-      'Haramaya University',
-      'Dire Dawa University',
-      'Wollo University',
-      'Debre Berhan University',
-      'Debre Markos University',
-      'Wollega University',
-      'Wolaita Sodo University',
-      'Dilla University',
-      'Ambo University',
-      'Axum University',
-      'Wachemo University',
-      'Wolkite University',
-      'Ethiopia'
-    ];
 
-    // Check paper title
-    if (paper.title) {
-      const title = paper.title.toLowerCase();
-      ethiopianUniversities.forEach(university => {
-        if (title.includes(university.toLowerCase()) && !affiliations.includes(university)) {
-          affiliations.push(university);
-        }
-      });
-    }
+    this.checkTextForAffiliations(paper.title, affiliations);
+    this.checkTextForAffiliations(paper.abstract, affiliations);
+    this.checkTextForAffiliations(paper.venue, affiliations);
 
-    // Check abstract
-    if (paper.abstract) {
-      const abstract = paper.abstract.toLowerCase();
-      ethiopianUniversities.forEach(university => {
-        if (abstract.includes(university.toLowerCase()) && !affiliations.includes(university)) {
-          affiliations.push(university);
-        }
-      });
-    }
-
-    // Check venue
-    if (paper.venue) {
-      const venue = paper.venue.toLowerCase();
-      ethiopianUniversities.forEach(university => {
-        if (venue.includes(university.toLowerCase()) && !affiliations.includes(university)) {
-          affiliations.push(university);
-        }
-      });
-    }
-
-    // Check authors
     if (paper.authors && Array.isArray(paper.authors)) {
       paper.authors.forEach((author: any) => {
         if (author.name) {
-          const authorName = author.name.toLowerCase();
-          ethiopianUniversities.forEach(university => {
-            if (authorName.includes(university.toLowerCase()) && !affiliations.includes(university)) {
-              affiliations.push(university);
-            }
-          });
+          this.checkTextForAffiliations(author.name, affiliations);
         }
       });
     }
@@ -133,68 +135,29 @@ export class SemanticScholarTool {
     return affiliations;
   }
 
-  private enhanceQueryWithEthiopianTerms(query: string): string {
-    const ethiopianTerms = ['Ethiopia', 'Ethiopian', 'Addis Ababa', 'Bahir Dar', 'Mekelle', 'Jimma'];
+  private checkTextForAffiliations(text: string | undefined, affiliations: string[]): void {
+    if (!text) return;
 
-    // Check if any Ethiopian term is already in the query
-    const hasEthiopianTerm = ethiopianTerms.some(term =>
-      query.toLowerCase().includes(term.toLowerCase())
+    const lowerText = text.toLowerCase();
+    for (const university of ETHIOPIAN_UNIVERSITIES) {
+      if (
+        lowerText.includes(university.toLowerCase()) &&
+        !affiliations.includes(university)
+      ) {
+        affiliations.push(university);
+      }
+    }
+  }
+
+  enhanceQueryWithEthiopianTerms(query: string): string {
+    const hasEthiopianTerm = ETHIOPIAN_UNIVERSITIES.some((uni) =>
+      query.toLowerCase().includes(uni.toLowerCase())
     );
 
-    // If no Ethiopian term is present, add 'Ethiopia OR Ethiopian' to the query
     if (!hasEthiopianTerm) {
       return `${query} Ethiopia`;
     }
 
     return query;
-  }
-
-  private extractEthiopianAffiliations(authors: any[]): string[] {
-    const ethiopianUniversities = [
-      'Addis Ababa University',
-      'Bahir Dar University',
-      'Mekelle University',
-      'Jimma University',
-      'Hawassa University',
-      'Gondar University',
-      'Adama Science and Technology University',
-      'Arba Minch University',
-      'Haramaya University',
-      'Dire Dawa University',
-      'Wollo University',
-      'Debre Berhan University',
-      'Debre Markos University',
-      'Wollega University',
-      'Wolaita Sodo University',
-      'Dilla University',
-      'Ambo University',
-      'Axum University',
-      'Wachemo University',
-      'Wolkite University',
-      'Ethiopia'
-    ];
-
-    const affiliations: string[] = [];
-
-    // Extract affiliations from authors if available
-    authors.forEach(author => {
-      if (author.affiliations && Array.isArray(author.affiliations)) {
-        author.affiliations.forEach((affiliation: any) => {
-          // Check if the affiliation is a string
-          if (affiliation && typeof affiliation === 'string') {
-            // Check if the affiliation contains any Ethiopian university
-            ethiopianUniversities.forEach(university => {
-              if (affiliation.toLowerCase().includes(university.toLowerCase())) {
-                if (!affiliations.includes(university)) {
-                  affiliations.push(university);
-                }
-              }
-            });
-          }
-        });
-      }
-    });
-
-    return affiliations;
   }
 }

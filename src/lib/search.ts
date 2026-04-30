@@ -1,22 +1,25 @@
 import { ArxivToolWrapper } from './tools/ArxivTool';
 import { SemanticScholarTool } from './tools/SemanticScholarTool';
-import { ResearchPaper, SearchParams, SearchResponse } from '@/types';
+import { CrossRefTool } from './tools/CrossRefTool';
+import { ResearchPaper, SearchParams, SearchResult } from '@/types';
 
 export class SearchService {
   private arxivTool: ArxivToolWrapper;
   private semanticScholarTool: SemanticScholarTool;
+  private crossRefTool: CrossRefTool;
 
   constructor(semanticScholarApiKey?: string) {
     this.arxivTool = new ArxivToolWrapper();
     this.semanticScholarTool = new SemanticScholarTool(semanticScholarApiKey);
+    this.crossRefTool = new CrossRefTool();
   }
 
-  async searchPapers(params: SearchParams): Promise<SearchResponse> {
+  async searchPapers(params: SearchParams): Promise<SearchResult> {
     const {
       query,
       page = 1,
-      limit = 50, // Increased default limit to get more results
-      ethiopianOnly = false, // Default to false now - only filter if explicitly requested
+      limit = 50, 
+      ethiopianOnly = false, 
       authorName,
       affiliation,
       title,
@@ -62,16 +65,18 @@ export class SearchService {
 
     try {
       // Search papers from both sources
-      const [arxivPapers, semanticScholarPapers] = await Promise.all([
+      const [arxivPapers, semanticScholarPapers, crossRefPapers] = await Promise.all([
         this.arxivTool.searchPapers(enhancedQuery, limit * 2),
-        this.semanticScholarTool.searchPapers(enhancedQuery, limit * 2)
+        this.semanticScholarTool.searchPapers(enhancedQuery, limit * 2),
+        this.crossRefTool.searchPapers(enhancedQuery, limit)
       ]);
 
       console.log(`ArXiv returned ${arxivPapers.length} papers`);
       console.log(`Semantic Scholar returned ${semanticScholarPapers.length} papers`);
+      console.log(`CrossRef returned ${crossRefPapers.length} papers`);
 
       // Combine and deduplicate results
-      let allPapers = [...arxivPapers, ...semanticScholarPapers];
+      let allPapers = [...arxivPapers, ...semanticScholarPapers, ...crossRefPapers];
       console.log(`Combined papers before deduplication: ${allPapers.length}`);
 
       // Remove duplicates based on title similarity
@@ -102,7 +107,9 @@ export class SearchService {
         papers: paginatedPapers,
         total: allPapers.length,
         page,
-        limit
+        limit,
+        sources: ['arxiv', 'semantic_scholar', 'crossref'],
+        ethiopianCount: allPapers.filter(p => p.affiliations.length > 0).length
       };
     } catch (error) {
       console.error('Error searching papers:', error);
@@ -110,7 +117,9 @@ export class SearchService {
         papers: [],
         total: 0,
         page,
-        limit
+        limit,
+        sources: [],
+        ethiopianCount: 0
       };
     }
   }

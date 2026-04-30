@@ -1,14 +1,9 @@
-export interface ResearchPaper {
-  id: string;
-  title: string;
-  authors: string[];
-  abstract: string;
-  url: string;
-  pdfUrl?: string;
-  publishedDate?: string;
-  affiliations: string[];
-  source: 'arxiv' | 'semantic_scholar' | 'other';
-}
+export * from './paper';
+export * from './llm';
+
+import type { ResearchPaper } from './paper';
+
+export type { ResearchPaper };
 
 export interface SearchParams {
   query: string;
@@ -20,7 +15,7 @@ export interface SearchParams {
   title?: string;
   year?: string;
   topic?: string;
-  modelInterpretation?: string; // Added to store the model's interpretation
+  modelInterpretation?: string;
 }
 
 export interface SearchResponse {

@@ -56,7 +56,7 @@ export default function SearchBar({ onSearch, isLoading, processingWithLLM }: Se
         </div>
 
         <div className="text-sm text-gray-500 italic">
-          <p>Ask in natural language - our AI will understand what you're looking for!</p>
+          <p>Ask in natural language - our AI will understand what you are looking for!</p>
         </div>
 
         <div className="flex items-center gap-2">

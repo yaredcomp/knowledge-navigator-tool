@@ -2,16 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ArxivToolWrapper } from '@/lib/tools/ArxivTool';
 import { SemanticScholarTool } from '@/lib/tools/SemanticScholarTool';
 
-// Initialize the tools
 const arxivTool = new ArxivToolWrapper();
 const semanticScholarTool = new SemanticScholarTool();
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     
     if (!id) {
       return NextResponse.json(
