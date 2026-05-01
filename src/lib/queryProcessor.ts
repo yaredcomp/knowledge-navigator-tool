@@ -9,7 +9,9 @@ interface ProcessedQuery {
   ethiopianOnly: boolean;
   year?: string;
   limit?: number;
-  modelInterpretation?: string; // Added to store the model's interpretation
+  modelInterpretation?: string;
+  provider?: string;
+  model?: string;
 }
 
 export class QueryProcessor {
@@ -104,6 +106,10 @@ Only respond with the JSON object, nothing else.
         parsedResponse.query = userInput;
       }
 
+      // Add provider info
+      parsedResponse.provider = 'ollama';
+      parsedResponse.model = this.model;
+
       console.log('Processed query:', parsedResponse);
       return parsedResponse;
     } catch (error) {
@@ -159,7 +165,9 @@ Only respond with the JSON object, nothing else.
       authorName: authorName,
       year: year,
       affiliation: affiliation,
-      modelInterpretation: modelInterpretation + '. (Processed without LLM)',
+      modelInterpretation: modelInterpretation,
+      provider: 'none',
+      model: 'fallback',
     };
   }
 }

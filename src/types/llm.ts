@@ -20,6 +20,8 @@ export interface ProcessedQuery {
   year: string | null;
   limit: number | null;
   modelInterpretation: string;
+  provider?: string;
+  model?: string;
 }
 
 export interface LLMResponse {

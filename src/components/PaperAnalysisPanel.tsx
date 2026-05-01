@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo, memo } from 'react';
 
 interface PaperAnalysis {
   paperType: string;
@@ -23,7 +23,21 @@ interface PaperAnalysisPanelProps {
   paperId: string;
 }
 
-export default function PaperAnalysisPanel({ title, abstract, authors, paperId }: PaperAnalysisPanelProps) {
+const getNoveltyColor = (score: number): string => {
+  if (score >= 8) return 'text-emerald-400';
+  if (score >= 6) return 'text-amber-400';
+  if (score >= 4) return 'text-orange-400';
+  return 'text-red-400';
+};
+
+const getNoveltyLabel = (score: number): string => {
+  if (score >= 8) return 'Groundbreaking';
+  if (score >= 6) return 'Highly Novel';
+  if (score >= 4) return 'Moderately Novel';
+  return 'Incremental';
+};
+
+function PaperAnalysisPanel({ title, abstract, authors, paperId }: PaperAnalysisPanelProps) {
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,19 +73,8 @@ export default function PaperAnalysisPanel({ title, abstract, authors, paperId }
     }
   };
 
-  const getNoveltyColor = (score: number) => {
-    if (score >= 8) return 'text-emerald-400';
-    if (score >= 6) return 'text-amber-400';
-    if (score >= 4) return 'text-orange-400';
-    return 'text-red-400';
-  };
-
-  const getNoveltyLabel = (score: number) => {
-    if (score >= 8) return 'Groundbreaking';
-    if (score >= 6) return 'Highly Novel';
-    if (score >= 4) return 'Moderately Novel';
-    return 'Incremental';
-  };
+  const noveltyColor = useMemo(() => getNoveltyColor(analysis?.noveltyScore ?? 0), [analysis?.noveltyScore]);
+  const noveltyLabel = useMemo(() => getNoveltyLabel(analysis?.noveltyScore ?? 0), [analysis?.noveltyScore]);
 
   return (
     <div className="mt-4 border-t border-gray-800/50 pt-4">
@@ -176,7 +179,7 @@ export default function PaperAnalysisPanel({ title, abstract, authors, paperId }
               <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-lg p-4 border border-purple-500/20">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider">Novelty Score</h4>
-                  <span className={`text-2xl font-bold ${getNoveltyColor(analysis.noveltyScore)}`}>
+                  <span className={`text-2xl font-bold ${noveltyColor}`}>
                     {analysis.noveltyScore}/10
                   </span>
                 </div>
@@ -189,8 +192,8 @@ export default function PaperAnalysisPanel({ title, abstract, authors, paperId }
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className={`text-sm font-medium ${getNoveltyColor(analysis.noveltyScore)}`}>
-                    {getNoveltyLabel(analysis.noveltyScore)}
+                  <span className={`text-sm font-medium ${noveltyColor}`}>
+                    {noveltyLabel}
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-3 leading-relaxed">
@@ -261,3 +264,5 @@ export default function PaperAnalysisPanel({ title, abstract, authors, paperId }
     </div>
   );
 }
+
+export default memo(PaperAnalysisPanel);
